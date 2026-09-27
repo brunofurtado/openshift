@@ -1,0 +1,123 @@
+---
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: policy-gatekeeper-setup
+  namespace: open-cluster-management-global-set
+spec:
+  disabled: false
+  remediationAction: enforce
+  policy-templates:
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: disallow-latest-tag-logic
+        spec:
+          remediationAction: enforce
+          severity: high
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: templates.gatekeeper.sh/v1beta1
+                kind: ConstraintTemplate
+                metadata:
+                  name: k8sdisallowlatesttag
+                spec:
+                  crd:
+                    spec:
+                      names:
+                        kind: K8sDisallowLatestTag
+                      validation:
+                        openAPIV3Schema:
+                          type: object
+                  targets:
+                    - target: admission.k8s.gatekeeper.sh
+                      rego: |
+                        package k8sdisallowlatesttag
+
+                        violation[{"msg": msg}] {
+                          container := input.review.object.spec.template.spec.containers[_]
+                          has_latest_tag(container)
+                          msg := sprintf("Container '%v' is using the forbidden 'latest' image tag. Use a specific version tag instead.", [container.name])
+                        }
+
+                        violation[{"msg": msg}] {
+                          container := input.review.object.spec.template.spec.initContainers[_]
+                          has_latest_tag(container)
+                          msg := sprintf("InitContainer '%v' is using the forbidden 'latest' image tag. Use a specific version tag instead.", [container.name])
+                        }
+
+                        has_latest_tag(container) {
+                          endswith(container.image, ":latest")
+                        }
+
+                        has_latest_tag(container) {
+                          not contains(container.image, ":")
+                        }
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: disallow-latest-tag-constraint
+        spec:
+          remediationAction: enforce
+          severity: high
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: constraints.gatekeeper.sh/v1beta1
+                kind: K8sDisallowLatestTag
+                metadata:
+                  name: no-latest-tags-in-deployments
+                spec:
+                  enforcementAction: deny
+                  match:
+                    excludedNamespaces:
+                      - kube-*
+                      - openshift-*
+                      - stackrox
+                      - open-cluster-management*
+                    kinds:
+                      - apiGroups:
+                          - apps
+                        kinds:
+                          - Deployment
+                      - apiGroups:
+                          - ""
+                        kinds:
+                          - Pod
+---
+apiVersion: cluster.open-cluster-management.io/v1beta1
+kind: Placement
+metadata:
+  name: policy-gatekeeper-setup-placement
+  namespace: open-cluster-management-global-set
+spec:
+  predicates:
+    - requiredClusterSelector:
+        labelSelector:
+          matchExpressions:
+            - key: local-cluster
+              operator: In
+              values:
+                - "true"
+  tolerations:
+    - key: cluster.open-cluster-management.io/unreachable
+      operator: Exists
+    - key: cluster.open-cluster-management.io/unavailable
+      operator: Exists
+---
+apiVersion: policy.open-cluster-management.io/v1
+kind: PlacementBinding
+metadata:
+  name: policy-gatekeeper-setup-placement-binding
+  namespace: open-cluster-management-global-set
+placementRef:
+  name: policy-gatekeeper-setup-placement
+  kind: Placement
+  apiGroup: cluster.open-cluster-management.io
+subjects:
+  - name: policy-gatekeeper-setup
+    kind: Policy
+    apiGroup: policy.open-cluster-management.io

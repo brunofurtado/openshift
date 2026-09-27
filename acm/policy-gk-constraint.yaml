@@ -1,0 +1,85 @@
+---
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: policy-gk-constraints
+  namespace: open-cluster-management-global-set
+  annotations:
+    policy.open-cluster-management.io/description: >-
+      Blocks Deployments and Pods that use the 'latest' image tag or omit a tag entirely.
+      Depends on policy-gatekeeper-setup to install the ConstraintTemplate first.
+spec:
+  disabled: false
+  remediationAction: inform
+  policy-templates:
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: disallow-latest-tag-constraint
+        spec:
+          remediationAction: inform
+          severity: high
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: constraints.gatekeeper.sh/v1beta1
+                kind: K8sDisallowLatestTag
+                metadata:
+                  name: no-latest-tags-in-deployments
+                spec:
+                  enforcementAction: deny
+                  match:
+                    kinds:
+                      - apiGroups:
+                          - apps
+                        kinds:
+                          - Deployment
+                      - apiGroups:
+                          - ""
+                        kinds:
+                          - Pod
+                    excludedNamespaces:
+                      - kube-*
+                      - openshift-*
+                      - stackrox
+                      - open-cluster-management*
+      extraDependencies:
+        - name: disallow-latest-tag-logic
+          kind: ConfigurationPolicy
+          apiVersion: policy.open-cluster-management.io/v1
+          compliance: Compliant
+---
+apiVersion: cluster.open-cluster-management.io/v1beta1
+kind: Placement
+metadata:
+  name: policy-gk-constraints-placement
+  namespace: open-cluster-management-global-set
+spec:
+  predicates:
+    - requiredClusterSelector:
+        labelSelector:
+          matchExpressions:
+            - key: local-cluster
+              operator: In
+              values:
+                - "true"
+  tolerations:
+    - key: cluster.open-cluster-management.io/unreachable
+      operator: Exists
+    - key: cluster.open-cluster-management.io/unavailable
+      operator: Exists
+---
+apiVersion: policy.open-cluster-management.io/v1
+kind: PlacementBinding
+metadata:
+  name: policy-gk-constraints-placement-binding
+  namespace: open-cluster-management-global-set
+placementRef:
+  name: policy-gk-constraints-placement
+  kind: Placement
+  apiGroup: cluster.open-cluster-management.io
+subjects:
+  - name: policy-gk-constraints
+    kind: Policy
+    apiGroup: policy.open-cluster-management.io

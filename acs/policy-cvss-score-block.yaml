@@ -1,0 +1,30 @@
+---
+apiVersion: platform.stackrox.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: block-cvss-7-or-higher
+  namespace: stackrox
+  annotations:
+    meta.helm.sh/release-name: stackrox-secured-cluster-services
+spec:
+  policyName: "Block Images with CVSS >= 7"
+  description: >-
+    Blocks deployments containing container images with at least one
+    vulnerability scored CVSS 7.0 or higher (High/Critical).
+    Enforcement: build-time fail and deploy-time scale-to-zero.
+  severity: HIGH_SEVERITY
+  categories:
+    - Vulnerability Management
+  lifecycleStages:
+    - BUILD
+    - DEPLOY
+  enforcementActions:
+    - FAIL_BUILD_ENFORCEMENT
+    - SCALE_TO_ZERO_ENFORCEMENT
+  policySections:
+    - sectionName: "CVSS Score >= 7"
+      policyGroups:
+        - fieldName: "CVSS"
+          booleanOperator: OR
+          values:
+            - value: ">= 7.0"
