@@ -12,38 +12,33 @@ Enforces a policy across managed clusters that blocks Deployments and Pods using
 
 ### 1. `policy-gatekeeper-setup.yaml`
 
-Sets up the Gatekeeper foundation. Contains:
+Sets up the Gatekeeper ConstraintTemplate. Contains:
 
 | Resource | Name | Purpose |
 |----------|------|---------|
 | **Policy** | `policy-gatekeeper-setup` | Wrapper policy (remediationAction: `enforce`) |
 | ConfigurationPolicy | `disallow-latest-tag-logic` | Creates the `ConstraintTemplate` with Rego logic that detects `latest` tags |
-| ConfigurationPolicy | `disallow-latest-tag-constraint` | Creates the `K8sDisallowLatestTag` constraint instance |
 | Placement | `policy-gatekeeper-setup-placement` | Targets clusters with label `local-cluster=true` |
 | PlacementBinding | `policy-gatekeeper-setup-placement-binding` | Binds the placement to the policy |
 
 ### 2. `policy-gk-constraint.yaml`
 
-An alternative, dependency-aware way to deploy the constraint. Contains:
+Deploys the Gatekeeper constraint with dependency ordering. Contains:
 
 | Resource | Name | Purpose |
 |----------|------|---------|
-| **Policy** | `policy-gk-constraints` | Wrapper policy (remediationAction: `inform`) |
-| ConfigurationPolicy | `disallow-latest-tag-constraint` | Creates the same constraint, but only after the ConstraintTemplate is compliant (via `extraDependencies`) |
+| **Policy** | `policy-gk-constraints` | Wrapper policy (remediationAction: `enforce`) |
+| ConfigurationPolicy | `disallow-latest-tag-constraint` | Creates the constraint after the ConstraintTemplate is compliant (via `extraDependencies`) |
 | Placement | `policy-gk-constraints-placement` | Targets clusters with label `local-cluster=true` |
 | PlacementBinding | `policy-gk-constraints-placement-binding` | Binds the placement to the policy |
-
-> **Note:** Both files create the same constraint resource (`no-latest-tags-in-deployments`). Use **one** approach, not both simultaneously:
-> - **Self-contained**: Apply only `policy-gatekeeper-setup.yaml` — it enforces both the template and the constraint.
-> - **Separated with dependency ordering**: Remove the `disallow-latest-tag-constraint` policy-template from `policy-gatekeeper-setup.yaml` and apply both files — the constraint in `policy-gk-constraint.yaml` will wait until the template is compliant before evaluating.
 
 ## Execution Order
 
 ```
 1. Apply policy-gatekeeper-setup.yaml
-   └── Creates the ConstraintTemplate (+ constraint if using self-contained approach)
+   └── Creates the ConstraintTemplate
 
-2. Apply policy-gk-constraint.yaml  (only if using the separated approach)
+2. Apply policy-gk-constraint.yaml
    └── Waits for ConstraintTemplate to be Compliant (extraDependencies)
    └── Then creates the Constraint instance
 ```
@@ -52,7 +47,7 @@ An alternative, dependency-aware way to deploy the constraint. Contains:
 
 ```bash
 oc apply -f policy-gatekeeper-setup.yaml
-oc apply -f policy-gk-constraint.yaml   # only if using the separated approach
+oc apply -f policy-gk-constraint.yaml
 ```
 
 ### Verify
