@@ -10,7 +10,7 @@ metadata:
       Depends on policy-gatekeeper-setup to install the ConstraintTemplate first.
 spec:
   disabled: false
-  remediationAction: inform
+  remediationAction: enforce
   policy-templates:
     - objectDefinition:
         apiVersion: policy.open-cluster-management.io/v1
@@ -18,7 +18,7 @@ spec:
         metadata:
           name: disallow-latest-tag-constraint
         spec:
-          remediationAction: inform
+          remediationAction: enforce
           severity: high
           object-templates:
             - complianceType: musthave

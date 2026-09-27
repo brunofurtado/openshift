@@ -55,38 +55,6 @@ spec:
                         has_latest_tag(container) {
                           not contains(container.image, ":")
                         }
-    - objectDefinition:
-        apiVersion: policy.open-cluster-management.io/v1
-        kind: ConfigurationPolicy
-        metadata:
-          name: disallow-latest-tag-constraint
-        spec:
-          remediationAction: enforce
-          severity: high
-          object-templates:
-            - complianceType: musthave
-              objectDefinition:
-                apiVersion: constraints.gatekeeper.sh/v1beta1
-                kind: K8sDisallowLatestTag
-                metadata:
-                  name: no-latest-tags-in-deployments
-                spec:
-                  enforcementAction: deny
-                  match:
-                    excludedNamespaces:
-                      - kube-*
-                      - openshift-*
-                      - stackrox
-                      - open-cluster-management*
-                    kinds:
-                      - apiGroups:
-                          - apps
-                        kinds:
-                          - Deployment
-                      - apiGroups:
-                          - ""
-                        kinds:
-                          - Pod
 ---
 apiVersion: cluster.open-cluster-management.io/v1beta1
 kind: Placement
