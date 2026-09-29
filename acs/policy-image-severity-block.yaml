@@ -1,0 +1,28 @@
+---
+apiVersion: platform.stackrox.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: block-high-severity-images
+  namespace: stackrox
+  annotations:
+    meta.helm.sh/release-name: stackrox-secured-cluster-services
+spec:
+  policyName: "Block Deployment of High/Critical Severity Images"
+  description: >-
+    Blocks deployments containing container images classified by ACS with
+    an overall vulnerability severity of Important or Critical.
+    This checks the aggregated image risk rating, not individual CVE scores.
+  severity: HIGH_SEVERITY
+  categories:
+    - Vulnerability Management
+  lifecycleStages:
+    - DEPLOY
+  enforcementActions:
+    - SCALE_TO_ZERO_ENFORCEMENT
+  policySections:
+    - sectionName: "Image Severity >= Important"
+      policyGroups:
+        - fieldName: "Severity"
+          booleanOperator: OR
+          values:
+            - value: ">= IMPORTANT"
