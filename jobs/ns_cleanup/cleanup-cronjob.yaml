@@ -1,0 +1,125 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ns-cleanup-script
+  namespace: ns-cleanup
+  labels:
+    app.kubernetes.io/name: ns-cleanup
+data:
+  cleanup.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    MAX_AGE_DAYS="${MAX_AGE_DAYS:-7}"
+
+    # 'oc adm must-gather' and 'oc debug' create their namespaces with a
+    # generateName prefix, so Kubernetes appends exactly 5 random characters.
+    # Anchoring on that suffix is what keeps a long-lived namespace such as
+    # 'openshift-must-gather-operator' out of the selection.
+    NAME_PATTERN='^openshift-(must-gather|debug|debug-node)-[a-z0-9]{5}$'
+
+    now_epoch="$(date -u +%s)"
+    cutoff_epoch=$(( now_epoch - MAX_AGE_DAYS * 86400 ))
+    deleted=0
+    kept=0
+
+    echo "ns-cleanup: pattern=${NAME_PATTERN} max_age=${MAX_AGE_DAYS}d"
+
+    while read -r name created phase; do
+      [[ -z "${name}" ]] && continue
+      [[ "${name}" =~ ${NAME_PATTERN} ]] || continue
+
+      if [[ "${phase}" == "Terminating" ]]; then
+        echo "  skip   ${name} (already Terminating)"
+        continue
+      fi
+
+      created_epoch="$(date -u -d "${created}" +%s)"
+      age_days=$(( ( now_epoch - created_epoch ) / 86400 ))
+
+      if (( created_epoch > cutoff_epoch )); then
+        echo "  keep   ${name} (age ${age_days}d)"
+        kept=$(( kept + 1 ))
+        continue
+      fi
+
+      echo "  delete ${name} (age ${age_days}d)"
+      # --wait=false: namespace finalization can take minutes; do not block the
+      # rest of the sweep on it.
+      oc delete namespace "${name}" --wait=false
+      deleted=$(( deleted + 1 ))
+    done < <(oc get namespaces -o go-template='{{range .items}}{{.metadata.name}} {{.metadata.creationTimestamp}} {{.status.phase}}{{"\n"}}{{end}}')
+
+    echo "ns-cleanup: done deleted=${deleted} kept=${kept}"
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ns-cleanup
+  namespace: ns-cleanup
+  labels:
+    app.kubernetes.io/name: ns-cleanup
+spec:
+  # Daily at 03:00 UTC.
+  schedule: "0 3 * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 900
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: ns-cleanup
+        spec:
+          serviceAccountName: ns-cleanup
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: ns-cleanup
+              # Pin to your cluster's minor version.
+              # An explicit tag is required if the repo's Gatekeeper and ACS policies reject ':latest'.
+              image: registry.redhat.io/openshift4/ose-cli:v4.16
+              command:
+                - /bin/bash
+                - /scripts/cleanup.sh
+              env:
+                - name: MAX_AGE_DAYS
+                  value: "7"
+                # oc writes cache under $HOME; the restricted-v2 SCC assigns an arbitrary UID whose home directory is not writable.
+                - name: HOME
+                  value: /tmp
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              volumeMounts:
+                - name: script
+                  mountPath: /scripts
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: script
+              configMap:
+                name: ns-cleanup-script
+                defaultMode: 0444
+            - name: tmp
+              emptyDir: {}

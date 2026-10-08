@@ -16,15 +16,21 @@ This repository serves as a hands-on lab for implementing security and operation
 ```
 openshift/
 ├── acm/                        # ACM governance policies
+│   ├── README.md                       # Hub-and-spoke architecture, placement guide
 │   ├── policy-gatekeeper-setup.yaml    # Gatekeeper ConstraintTemplate (Rego logic)
 │   └── policy-gk-constraint.yaml       # Gatekeeper Constraint (admission enforcement)
 ├── acs/                        # ACS / StackRox security policies
+│   ├── README.md                           # ACS architecture, roxctl, rollout guide
 │   ├── policy-cvss-score-block.yaml        # Block images with CVSS >= 7.0
 │   └── policy-image-severity-block.yaml    # Block images with severity >= Important
 ├── logging/                    # Cluster logging configurations
 │   └── (configurations coming soon)
 ├── pipelines/                  # Tekton CI/CD pipelines
 │   └── (pipelines coming soon)
+├── jobs/                       # Scheduled cluster maintenance
+│   └── ns_cleanup/                     # Prune orphaned must-gather / debug namespaces
+│       ├── rbac.yaml                       # SA + least-privilege ClusterRole
+│       └── cleanup-cronjob.yaml            # Daily CronJob
 └── CLAUDE.md                   # AI assistant context and safety guardrails
 ```
 
@@ -69,6 +75,15 @@ Two complementary policies prevent deploying vulnerable images:
 |--------|-------|--------|
 | `policy-cvss-score-block` | Individual CVEs with CVSS >= 7.0 | Fail build + scale to zero |
 | `policy-image-severity-block` | Overall image severity >= Important | Scale to zero |
+
+See [acs/](acs/README.md) for architecture, `roxctl` usage, and the rollout procedure.
+
+## Scheduled Maintenance
+
+### Namespace Cleanup
+A daily CronJob removes orphaned `openshift-must-gather-*` and `openshift-debug-*`
+namespaces left behind by interrupted `oc adm must-gather` / `oc debug` runs, once
+they are older than 7 days. See [jobs/ns_cleanup/](jobs/ns_cleanup/README.md).
 
 ## Contributing
 

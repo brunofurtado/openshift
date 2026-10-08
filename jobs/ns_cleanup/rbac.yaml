@@ -1,0 +1,48 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ns-cleanup
+  labels:
+    app.kubernetes.io/name: ns-cleanup
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ns-cleanup
+  namespace: ns-cleanup
+  labels:
+    app.kubernetes.io/name: ns-cleanup
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ns-cleanup
+  labels:
+    app.kubernetes.io/name: ns-cleanup
+rules:
+  # Least privilege: enough to enumerate namespaces and delete the orphans.
+  # Deliberately excludes create/update/patch and every other resource type.
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - get
+      - list
+      - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ns-cleanup
+  labels:
+    app.kubernetes.io/name: ns-cleanup
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ns-cleanup
+subjects:
+  - kind: ServiceAccount
+    name: ns-cleanup
+    namespace: ns-cleanup
