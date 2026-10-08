@@ -56,7 +56,7 @@ Spoke clusters are lightweight — they only run agents, not the full ACM operat
 2. **Governance Policy Framework** agents are installed by the klusterlet. They evaluate `ConfigurationPolicy` templates locally and report compliance status to the hub.
 3. **Gatekeeper** (if needed) must be installed separately on each spoke. This can be automated by creating an ACM policy with `remediationAction: enforce` that deploys the Gatekeeper operator — the same approach used in this lab's `policy-gatekeeper-setup.yaml`.
 
-No ACM operator license or installation is required on spoke clusters.
+The spoke clusters must be subscribed under OpenShift Plus or OpenShift Plus without OpenShift - ROSA clusters for instance - subscription. 
 
 ### Communication Flow
 
@@ -191,7 +191,7 @@ oc get managedcluster <cluster-name> --show-labels
 
 ### Placement Patterns
 
-#### Target a Single Cluster (Current Lab Default)
+#### Target a Single Cluster (The current lab is on `local-cluster`)
 
 Selects only the hub's own local cluster:
 
